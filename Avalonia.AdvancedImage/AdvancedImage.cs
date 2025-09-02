@@ -1,4 +1,4 @@
-﻿using Avalonia.Controls;
+using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Metadata;
@@ -154,9 +154,7 @@ public partial class AdvancedImage : Control
                 RegisterForNextAnimationFrameUpdate();
             }
             else if (message == StopMessage)
-            {
                 _running = false;
-            }
             else if (message == ResetMessage)
                 Clear();
             else if (message is IAdvancedBitmap { IsInitialized: true } instance)

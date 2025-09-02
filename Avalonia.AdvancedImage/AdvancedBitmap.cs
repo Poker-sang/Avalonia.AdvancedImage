@@ -1,8 +1,7 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Avalonia.Media.Imaging;
 using Microsoft.IO;
 using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 
 namespace Avalonia.AdvancedImage;
 
@@ -39,7 +38,7 @@ public class AdvancedBitmap(Stream stream, bool disposeStream) : IAdvancedBitmap
         {
             if (_stream is null)
                 throw new NullReferenceException(nameof(_stream));
-            using var image = await Image.LoadAsync<Rgba32>(_stream);
+            using var image = await Image.LoadAsync(_stream);
             var delays = new int[image.Frames.Count];
             var frames = new Bitmap[image.Frames.Count];
             var index = 0;
@@ -82,14 +81,18 @@ public class AdvancedBitmap(Stream stream, bool disposeStream) : IAdvancedBitmap
                 delay = (int) (pngFrameMetadata.FrameDelay.ToDouble() * 10);
             else if (frame.Frames.RootFrame.Metadata.TryGetWebpFrameMetadata(out var webpFrameMetadata))
                 delay = (int) webpFrameMetadata.FrameDelay;
+            if (delay < 1)
+                delay = 10;
 
             await using var ms = _RecyclableMemoryStreamManager.GetStream();
-            await frame.SaveAsBmpAsync(ms);
+            await frame.SaveAsPngAsync(ms);
             ms.Position = 0;
             var bitmap = new Bitmap(ms);
             return (bitmap, delay);
         }
     }
+
+    // TODO private readonly BmpEncoder _bmpEncoder = new() { SupportTransparency = true };
 
     private static readonly RecyclableMemoryStreamManager _RecyclableMemoryStreamManager = new();
 }
