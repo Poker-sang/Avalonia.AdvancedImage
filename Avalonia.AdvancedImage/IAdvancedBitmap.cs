@@ -1,5 +1,7 @@
-﻿using Avalonia;
-using Avalonia.Media.Imaging;
+﻿using Avalonia.Media.Imaging;
+using Microsoft.IO;
+
+namespace Avalonia.AdvancedImage;
 
 public interface IAdvancedBitmap
 {
@@ -23,9 +25,15 @@ public interface IAdvancedBitmap
     event EventHandler? Initialized;
     
     event EventHandler<AdvancedBitmapFailedEventArgs>? Failed;
-}
 
-public class AdvancedBitmapFailedEventArgs(Exception exception) : EventArgs
-{
-    public Exception Exception { get; set; } = exception;
+    static sealed RecyclableMemoryStreamManager RecyclableMemoryStreamManager { get; set; } = new();
+
+    static IAdvancedBitmap Load(Stream stream, bool disposeStream)
+        => new SingleAdvancedBitmap(stream, disposeStream);
+
+    static IAdvancedBitmap Load(IReadOnlyCollection<Stream> frameStreams, IReadOnlyCollection<int> delays, bool disposeStream)
+        => new MultiAdvancedBitmap(frameStreams, delays, disposeStream);
+
+    static IAdvancedBitmap Load(IReadOnlyCollection<Bitmap> bitmaps, IReadOnlyCollection<int> delays)
+        => new AdvancedBitmapSimpleImpl(bitmaps, delays);
 }

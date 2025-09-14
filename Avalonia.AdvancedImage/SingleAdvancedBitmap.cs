@@ -1,11 +1,11 @@
 using System.Diagnostics.CodeAnalysis;
 using Avalonia.Media.Imaging;
-using Microsoft.IO;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Bmp;
 
 namespace Avalonia.AdvancedImage;
 
-public class AdvancedBitmap(Stream stream, bool disposeStream) : IAdvancedBitmap
+internal class SingleAdvancedBitmap(Stream stream, bool disposeStream) : IAdvancedBitmap
 {
     public bool IsInitialized { get => !IsFailed && field; private set; }
 
@@ -28,7 +28,7 @@ public class AdvancedBitmap(Stream stream, bool disposeStream) : IAdvancedBitmap
     
     public event EventHandler<AdvancedBitmapFailedEventArgs>? Failed;
     
-    private readonly Stream? _stream = stream ?? throw new ArgumentNullException(nameof(stream));
+    private Stream? _stream = stream ?? throw new ArgumentNullException(nameof(stream));
 
     public async Task InitAsync()
     {
@@ -39,21 +39,25 @@ public class AdvancedBitmap(Stream stream, bool disposeStream) : IAdvancedBitmap
             if (_stream is null)
                 throw new NullReferenceException(nameof(_stream));
             using var image = await Image.LoadAsync(_stream);
+            if (disposeStream)
+                await _stream.DisposeAsync();
+            _stream = null;
+
             var delays = new int[image.Frames.Count];
             var frames = new Bitmap[image.Frames.Count];
             var index = 0;
 
             while (image.Frames.Count is not 1)
             {
-                var exportFrame = image.Frames.ExportFrame(0);
+                using var exportFrame = image.Frames.ExportFrame(0);
                 (frames[index], delays[index]) = await GetBitmapAndDelayAsync(exportFrame);
-                exportFrame.Dispose();
                 index++;
             }
+
             (frames[index], delays[index]) = await GetBitmapAndDelayAsync(image);
 
             Size = new Size(image.Size.Width, image.Size.Height);
-            FrameCount = image.Frames.Count;
+            FrameCount = delays.Length;
             Delays = delays;
             Frames = frames;
             IsInitialized = true;
@@ -61,13 +65,11 @@ public class AdvancedBitmap(Stream stream, bool disposeStream) : IAdvancedBitmap
         }
         catch (Exception e)
         {
-            IsFailed = true;
-            Failed?.Invoke(this, new AdvancedBitmapFailedEventArgs(e));
-        }
-        finally
-        {
             if (_stream is not null && disposeStream)
                 await _stream.DisposeAsync();
+            _stream = null;
+            IsFailed = true;
+            Failed?.Invoke(this, new AdvancedBitmapFailedEventArgs(e));
         }
 
         return;
@@ -84,15 +86,14 @@ public class AdvancedBitmap(Stream stream, bool disposeStream) : IAdvancedBitmap
             if (delay < 1)
                 delay = 10;
 
-            await using var ms = _RecyclableMemoryStreamManager.GetStream();
-            await frame.SaveAsPngAsync(ms);
+            await using var ms = IAdvancedBitmap.RecyclableMemoryStreamManager.GetStream();
+            await frame.SaveAsync(ms, _bmpEncoder);
             ms.Position = 0;
             var bitmap = new Bitmap(ms);
             return (bitmap, delay);
         }
     }
 
-    // TODO private readonly BmpEncoder _bmpEncoder = new() { SupportTransparency = true };
-
-    private static readonly RecyclableMemoryStreamManager _RecyclableMemoryStreamManager = new();
+    // TODO SupportTransparency
+    private readonly BmpEncoder _bmpEncoder = new() { SupportTransparency = true };
 }

@@ -17,6 +17,6 @@ public partial class MainWindow : Window
             return;
         if (!File.Exists(TextBox.Text))
             return;
-        AdvancedImage.Source = new AdvancedBitmap(File.OpenRead(TextBox.Text), true);
+        AdvancedImage.Source = IAdvancedBitmap.Load(File.OpenRead(TextBox.Text), true);
     }
 }

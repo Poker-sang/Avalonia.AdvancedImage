@@ -1,13 +1,12 @@
 using Avalonia.Controls;
 using Avalonia.Media;
-using Avalonia.Media.Imaging;
 using Avalonia.Metadata;
 using Avalonia.Rendering.Composition;
 using System.Numerics;
 
 namespace Avalonia.AdvancedImage;
 
-public partial class AdvancedImage : Control
+public class AdvancedImage : Control
 {
     private CompositionCustomVisual? _customVisual;
 
@@ -65,9 +64,9 @@ public partial class AdvancedImage : Control
         _customVisual = compositor.CreateCustomVisual(new CustomVisualHandler());
         ElementComposition.SetElementChildVisual(this, _customVisual);
         _customVisual.SendHandlerMessage(CustomVisualHandler.StartMessage);
-
-        if (Source is { IsInitialized: false, IsFailed: false })
-            await Source.InitAsync();
+        
+        if (Source is { IsInitialized: false, IsFailed: false } source)
+            await Task.Run(async () => await source.InitAsync());
         if (Source is { IsInitialized: true })
             _customVisual?.SendHandlerMessage(Source);
 
@@ -100,8 +99,8 @@ public partial class AdvancedImage : Control
             _customVisual.SendHandlerMessage(CustomVisualHandler.ResetMessage);
         else
         {
-            if (Source is { IsInitialized: false, IsFailed: false })
-                await Source.InitAsync();
+            if (Source is { IsInitialized: false, IsFailed: false } source)
+                await Task.Run(async () => await source.InitAsync());
             if (Source is { IsInitialized: true })
                 _customVisual.SendHandlerMessage(newValue);
         }
@@ -160,6 +159,9 @@ public partial class AdvancedImage : Control
             else if (message is IAdvancedBitmap { IsInitialized: true } instance)
             {
                 Clear();
+                if (instance.Delays.Count != instance.FrameCount)
+                    throw new ArgumentException(
+                        $"{nameof(instance.Delays)} inconsistent count with {nameof(instance.Frames)}");
                 _currentInstance = instance;
                 foreach (var delay in instance.Delays)
                 {
@@ -197,15 +199,11 @@ public partial class AdvancedImage : Control
             if (_currentInstance is not { IsInitialized: true })
                 return;
 
-            var bitmap = ProcessFrameTime((int)_animationElapsed.TotalMilliseconds % _totalTime);
+            var ms = (int) _animationElapsed.TotalMilliseconds % _totalTime;
+            var i = _frameTimes.BinarySearch(ms);
+            var bitmap = _currentInstance.Frames[i < 0 ? ~i - 1 : i];
+            // ImmediateDrawingContext 每次OnRender都会清空，所以每次都必须画
             drawingContext.DrawBitmap(bitmap, new Rect(_currentInstance.Size), GetRenderBounds());
-            
-            return;
-            Bitmap ProcessFrameTime(int ms)
-            {
-                var i = _frameTimes.BinarySearch(ms);
-                return _currentInstance.Frames[i < 0 ? ~i - 1 : i];
-            }
         }
     }
 }
