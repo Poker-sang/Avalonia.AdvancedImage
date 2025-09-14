@@ -94,6 +94,9 @@ internal class SingleAdvancedBitmap(Stream stream, bool disposeStream) : IAdvanc
         }
     }
 
-    // TODO SupportTransparency
-    private readonly BmpEncoder _bmpEncoder = new() { SupportTransparency = true };
+    private readonly BmpEncoder _bmpEncoder = new()
+    {
+        BitsPerPixel = BmpBitsPerPixel.Pixel32,
+        SupportTransparency = true
+    };
 }
