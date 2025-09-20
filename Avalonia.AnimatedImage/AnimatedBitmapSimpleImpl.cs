@@ -1,11 +1,11 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Avalonia.Media.Imaging;
 
-namespace Avalonia.AdvancedImage;
+namespace Avalonia.AnimatedImage;
 
-internal class AdvancedBitmapSimpleImpl : IAdvancedBitmap
+internal class AnimatedBitmapSimpleImpl : IAnimatedBitmap
 {
-    public AdvancedBitmapSimpleImpl(IReadOnlyCollection<Bitmap> bitmaps, IReadOnlyCollection<int> delays)
+    public AnimatedBitmapSimpleImpl(IReadOnlyCollection<Bitmap> bitmaps, IReadOnlyCollection<int> delays)
     {
         ArgumentNullException.ThrowIfNull(bitmaps);
         ArgumentNullException.ThrowIfNull(delays);
@@ -34,7 +34,7 @@ internal class AdvancedBitmapSimpleImpl : IAdvancedBitmap
 
     public event EventHandler? Initialized;
     
-    public event EventHandler<AdvancedBitmapFailedEventArgs>? Failed;
+    public event EventHandler<AnimatedBitmapFailedEventArgs>? Failed;
     
     public Task InitAsync() => Task.CompletedTask;
 }

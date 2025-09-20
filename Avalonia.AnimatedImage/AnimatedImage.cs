@@ -4,20 +4,20 @@ using Avalonia.Metadata;
 using Avalonia.Rendering.Composition;
 using System.Numerics;
 
-namespace Avalonia.AdvancedImage;
+namespace Avalonia.AnimatedImage;
 
-public class AdvancedImage : Control
+public class AnimatedImage : Control
 {
     private CompositionCustomVisual? _customVisual;
 
-    public static readonly StyledProperty<IAdvancedBitmap?> SourceProperty = AvaloniaProperty.Register<AdvancedImage, IAdvancedBitmap?>(name: nameof(Source), defaultValue: null);
+    public static readonly StyledProperty<IAnimatedBitmap?> SourceProperty = AvaloniaProperty.Register<AnimatedImage, IAnimatedBitmap?>(name: nameof(Source), defaultValue: null);
 
-    public static readonly StyledProperty<StretchDirection> StretchDirectionProperty = AvaloniaProperty.Register<AdvancedImage, StretchDirection>(nameof(StretchDirection), StretchDirection.Both);
+    public static readonly StyledProperty<StretchDirection> StretchDirectionProperty = AvaloniaProperty.Register<AnimatedImage, StretchDirection>(nameof(StretchDirection), StretchDirection.Both);
 
-    public static readonly StyledProperty<Stretch> StretchProperty = AvaloniaProperty.Register<AdvancedImage, Stretch>(nameof(Stretch), Stretch.UniformToFill);
+    public static readonly StyledProperty<Stretch> StretchProperty = AvaloniaProperty.Register<AnimatedImage, Stretch>(nameof(Stretch), Stretch.UniformToFill);
 
     [Content]
-    public IAdvancedBitmap? Source
+    public IAnimatedBitmap? Source
     {
         get => GetValue(SourceProperty); 
         set => SetValue(SourceProperty, value);
@@ -40,12 +40,18 @@ public class AdvancedImage : Control
         switch (change.Property.Name)
         {
             case nameof(Source):
-                OnSourcePropertyChanged(change.NewValue as IAdvancedBitmap);
+                OnSourcePropertyChanged(change.NewValue as IAnimatedBitmap);
                 break;
             case nameof(Stretch):
+                InvalidateArrange();
+                InvalidateMeasure();
+                _customVisual?.SendHandlerMessage(Stretch);
+                Update();
+                break;
             case nameof(StretchDirection):
                 InvalidateArrange();
                 InvalidateMeasure();
+                _customVisual?.SendHandlerMessage(StretchDirection);
                 Update();
                 break;
             case nameof(Bounds):
@@ -67,9 +73,10 @@ public class AdvancedImage : Control
         
         if (Source is { IsInitialized: false, IsFailed: false } source)
             await Task.Run(async () => await source.InitAsync());
+        _customVisual.SendHandlerMessage(Stretch);
+        _customVisual.SendHandlerMessage(StretchDirection);
         if (Source is { IsInitialized: true })
-            _customVisual?.SendHandlerMessage(Source);
-
+            _customVisual.SendHandlerMessage(Source);
         Update();
         base.OnAttachedToVisualTree(e);
     }
@@ -90,7 +97,7 @@ public class AdvancedImage : Control
             : default;
     }
 
-    private async void OnSourcePropertyChanged(IAdvancedBitmap? newValue)
+    private async void OnSourcePropertyChanged(IAnimatedBitmap? newValue)
     {
         if (_customVisual is null)
             return;
@@ -112,30 +119,20 @@ public class AdvancedImage : Control
 
     private void Update()
     {
-        if (_customVisual is null || Source is null)
+        if (_customVisual is null)
             return;
-
-        var sourceSize = Source.Size;
-        var viewPort = new Rect(Bounds.Size);
-
-        var scale = Stretch.CalculateScaling(Bounds.Size, sourceSize, StretchDirection);
-        var scaledSize = sourceSize * scale;
-        var destRect = viewPort
-            .CenterRect(new Rect(scaledSize))
-            .Intersect(viewPort);
-
-        var size = Stretch is Stretch.None ? sourceSize : destRect.Size;
         
-        _customVisual.Size = new Vector2((float)size.Width, (float)size.Height);
-
-        _customVisual.Offset = new Vector3((float)destRect.Position.X, (float)destRect.Position.Y, 0);
+        _customVisual.Size = new Vector2((float) Bounds.Width, (float) Bounds.Height);
+        _customVisual.Offset = Vector3.Zero;
     }
 
     private class CustomVisualHandler : CompositionCustomVisualHandler
     {
         private TimeSpan _animationElapsed;
         private TimeSpan? _lastServerTime;
-        private IAdvancedBitmap? _currentInstance;
+        private IAnimatedBitmap? _currentInstance;
+        private Stretch _stretch = Stretch.None;
+        private StretchDirection _stretchDirection = StretchDirection.Both;
         private int _totalTime;
         private readonly List<int> _frameTimes = [];
         private bool _running;
@@ -156,17 +153,28 @@ public class AdvancedImage : Control
                 _running = false;
             else if (message == ResetMessage)
                 Clear();
-            else if (message is IAdvancedBitmap { IsInitialized: true } instance)
+            else switch (message)
             {
-                Clear();
-                if (instance.Delays.Count != instance.FrameCount)
-                    throw new ArgumentException(
-                        $"{nameof(instance.Delays)} inconsistent count with {nameof(instance.Frames)}");
-                _currentInstance = instance;
-                foreach (var delay in instance.Delays)
+                case Stretch st:
+                    _stretch = st;
+                    break;
+                case StretchDirection sd:
+                    _stretchDirection = sd;
+                    break;
+                case IAnimatedBitmap { IsInitialized: true } instance:
                 {
-                    _frameTimes.Add(_totalTime);
-                    _totalTime += delay;
+                    Clear();
+                    if (instance.Delays.Count != instance.FrameCount)
+                        throw new ArgumentException(
+                            $"{nameof(instance.Delays)} inconsistent count with {nameof(instance.Frames)}");
+                    _currentInstance = instance;
+                    foreach (var delay in instance.Delays)
+                    {
+                        _frameTimes.Add(_totalTime);
+                        _totalTime += delay;
+                    }
+
+                    break;
                 }
             }
             return;
@@ -202,8 +210,21 @@ public class AdvancedImage : Control
             var ms = (int) _animationElapsed.TotalMilliseconds % _totalTime;
             var i = _frameTimes.BinarySearch(ms);
             var bitmap = _currentInstance.Frames[i < 0 ? ~i - 1 : i];
+
+            var viewPort = GetRenderBounds();
+            var bounds = viewPort.Size;
+            var sourceSize = _currentInstance.Size;
+            var sourceRect = new Rect(sourceSize);
+
+            var scale = _stretch.CalculateScaling(bounds, sourceSize, _stretchDirection);
+            var scaledRect = sourceRect * scale;
+            var destRect = viewPort
+                .CenterRect(scaledRect)
+                .Intersect(viewPort);
+            sourceRect = sourceRect.CenterRect(destRect / scale);
+
             // ImmediateDrawingContext 每次OnRender都会清空，所以每次都必须画
-            drawingContext.DrawBitmap(bitmap, new Rect(_currentInstance.Size), GetRenderBounds());
+            drawingContext.DrawBitmap(bitmap, sourceRect, destRect);
         }
     }
 }

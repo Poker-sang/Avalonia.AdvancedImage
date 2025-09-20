@@ -1,6 +1,6 @@
-﻿using System;
+using System;
 
-namespace Avalonia.AdvancedImage.Sample;
+namespace Avalonia.AnimatedImage.Sample;
 
 internal class Program
 {

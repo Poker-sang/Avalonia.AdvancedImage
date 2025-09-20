@@ -1,9 +1,9 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Avalonia.Media.Imaging;
 
-namespace Avalonia.AdvancedImage;
+namespace Avalonia.AnimatedImage;
 
-internal class MultiAdvancedBitmap(IReadOnlyCollection<Stream> frameStreams, IReadOnlyCollection<int> delays, bool disposeStream) : IAdvancedBitmap
+internal class MultiAnimatedBitmap(IReadOnlyCollection<Stream> frameStreams, IReadOnlyCollection<int> delays, bool disposeStream) : IAnimatedBitmap
 {
     public bool IsInitialized { get => !IsFailed && field; private set; }
 
@@ -24,7 +24,7 @@ internal class MultiAdvancedBitmap(IReadOnlyCollection<Stream> frameStreams, IRe
 
     public event EventHandler? Initialized;
     
-    public event EventHandler<AdvancedBitmapFailedEventArgs>? Failed;
+    public event EventHandler<AnimatedBitmapFailedEventArgs>? Failed;
 
     private List<Stream>? _frameStreams =
         (frameStreams ?? throw new ArgumentNullException(nameof(frameStreams))).Count is 0
@@ -79,7 +79,7 @@ internal class MultiAdvancedBitmap(IReadOnlyCollection<Stream> frameStreams, IRe
                     await frameStream.DisposeAsync();
             _frameStreams = null;
             IsFailed = true;
-            Failed?.Invoke(this, new AdvancedBitmapFailedEventArgs(e));
+            Failed?.Invoke(this, new AnimatedBitmapFailedEventArgs(e));
         }
     }
 }
